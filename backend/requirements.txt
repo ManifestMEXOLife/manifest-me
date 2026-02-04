@@ -1,0 +1,11 @@
+django
+django-ninja
+gunicorn
+psycopg2-binary
+celery
+redis
+flower
+django-storages
+boto3
+google-genai
+python-dotenv

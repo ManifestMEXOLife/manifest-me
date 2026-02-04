@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # 1. Django API (The Manager)
+  web:
+    build: ./backend
+    command: ./entrypoint.sh
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - DATABASE_URL=postgres://manifest_user:manifest_pass@db:5432/manifest_db
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    depends_on:
+      - db
+      - redis
+
+  # 2. Celery Worker (The Task Processor)
+  worker:
+    build: ./backend
+    command: ./start_worker.sh
+    volumes:
+      - ./backend:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - DATABASE_URL=postgres://manifest_user:manifest_pass@db:5432/manifest_db
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    depends_on:
+      - redis
+      - db
+
+  # 3. Redis (The Queue)
+  redis:
+    image: redis:7-alpine
+  db:
+    image: postgres:15
+    # ADD THIS SECTION:
+    ports:
+      - "5432:5432"
+    # -----------------
+    environment:
+      - POSTGRES_DB=manifest_db
+      - POSTGRES_USER=manifest_user
+      - POSTGRES_PASSWORD=manifest_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

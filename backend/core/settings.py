@@ -82,7 +82,7 @@ DATABASES = {
         'NAME': 'manifest_db',
         'USER': 'manifest_user',
         'PASSWORD': 'manifest_pass',
-        'HOST': 'localhost', # We use localhost because we are running the server on your Windows machine
+        'HOST': 'db', # We use localhost because we are running the server on your Windows machine
         'PORT': '5432',
     }
 }

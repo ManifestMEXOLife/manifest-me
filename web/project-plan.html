@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internal Roadmap | Manifest Me</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #eee;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        h1 { border-bottom: 1px solid #333; padding-bottom: 20px; margin-bottom: 40px; }
+        h2 { color: #fff; margin-top: 40px; }
+        .phase {
+            background: #111;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        .phase.done { border-left: 4px solid #4ade80; } /* Green */
+        .phase.active { border-left: 4px solid #facc15; } /* Yellow */
+        .phase.todo { border-left: 4px solid #666; opacity: 0.6; }
+        
+        .tag {
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: block;
+        }
+        .done .tag { color: #4ade80; }
+        .active .tag { color: #facc15; }
+        .todo .tag { color: #888; }
+
+        ul { padding-left: 20px; color: #aaa; }
+        li { margin-bottom: 8px; }
+        .back-link { color: #666; text-decoration: none; margin-bottom: 20px; display: block; }
+        .back-link:hover { color: #fff; }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">&larr; Back to Home</a>
+    <h1>Product Roadmap</h1>
+
+    <div class="phase done">
+        <span class="tag">Phase 1: Completed</span>
+        <h2>The Foundation</h2>
+        <ul>
+            <li>✅ Docker container running Python/Django</li>
+            <li>✅ PostgreSQL Database connected</li>
+            <li>✅ Native iOS App (SwiftUI) initialized</li>
+            <li>✅ Localhost Connection established</li>
+        </ul>
+    </div>
+
+    <div class="phase done">
+        <span class="tag">Phase 2: Completed</span>
+        <h2>Identity & Security</h2>
+        <ul>
+            <li>✅ JWT Authentication installed on Backend</li>
+            <li>✅ Secure Login Screen on iPhone</li>
+            <li>✅ Token storage & Validation</li>
+            <li>✅ Navigation Logic (Login -> Home)</li>
+        </ul>
+    </div>
+
+    <div class="phase active">
+        <span class="tag">Phase 3: In Progress</span>
+        <h2>The "Manifesting" Engine</h2>
+        <ul>
+            <li>🚧 Build "Create" screen on iOS (User Prompt)</li>
+            <li>⏳ Connect Python to AI Model (Video Generation)</li>
+            <li>⏳ Cloud Storage integration (AWS/Cloudinary)</li>
+            <li>⏳ Backend endpoint `/api/manifest`</li>
+        </ul>
+    </div>
+
+    <div class="phase todo">
+        <span class="tag">Phase 4: Up Next</span>
+        <h2>The Gallery</h2>
+        <ul>
+            <li>Creating the "/api/videos" feed</li>
+            <li>Grid View for past creations</li>
+            <li>Video Player implementation</li>
+        </ul>
+    </div>
+
+    <div class="phase todo">
+        <span class="tag">Phase 5: Investor Readiness</span>
+        <h2>The Demo Layer</h2>
+        <ul>
+            <li><strong>"Golden Ticket" System:</strong> Access codes for VCs/Founders to bypass paywall.</li>
+            <li><strong>Demo Mode:</strong> Full feature unlock without credit limits.</li>
+            <li><strong>Investor Dashboard:</strong> Metrics tracking for beta user engagement.</li>
+            <li>(Payment plumbing deferred until idea is confirmed).</li>
+        </ul>
+    </div>
+
+    <p style="text-align: center; margin-top: 50px; color: #444;">&copy; 2026 Manifest Me. Internal Use Only.</p>
+</body>
+</html>

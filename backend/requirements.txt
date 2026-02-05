@@ -9,3 +9,4 @@ django-storages
 boto3
 google-genai
 python-dotenv
+django-ninja-jwt

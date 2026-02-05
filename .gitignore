@@ -1,0 +1,24 @@
+# Python System Files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment (The big one!)
+venv/
+env/
+.env
+
+# Mac System Files
+.DS_Store
+
+# IDE Settings
+.vscode/
+.idea/
+
+# Database (If you ever use local sqlite)
+db.sqlite3
+
+# Django Media (Don't track uploaded user files)
+media/
+staticfiles/

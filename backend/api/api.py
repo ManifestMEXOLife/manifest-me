@@ -3,10 +3,16 @@ from typing import List
 
 from django.contrib.auth.models import User
 
+from ninja_extra import NinjaExtraAPI
+from ninja_jwt.controller import NinjaJWTDefaultController
+
 from .models import Video, Profile
 from .schemas import VideoIn, VideoOut, UserCreate, UserOut, ProfilePictureUpdate
 
-api = NinjaAPI()
+api = NinjaExtraAPI()
+
+# this auto adds the "Login" and "Refresh" endpoints
+api.register_controllers(NinjaJWTDefaultController)
 
 # 1. Create a Video (POST)
 @api.post("/videos", response=VideoOut)

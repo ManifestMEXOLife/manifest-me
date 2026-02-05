@@ -7,22 +7,39 @@
 
 import SwiftUI
 
-import SwiftUI
-
 @main
 struct ManifestMeApp: App {
-    // This variable "remembers" if we are logged in
-    // For now, it defaults to false.
-    @State private var isLoggedIn = false
+    // We default to false, but we will check the keychain immediately in init()
+    @State private var isLoggedIn: Bool
+    
+    init() {
+        // 1. Check the vault
+        let token = KeychainHelper.standard.read()
+        
+        // 2. Print the result to the console (Debug)
+        if token != nil {
+            print("🔍 DEBUG: Found token in Keychain! Logging in automatically.")
+            _isLoggedIn = State(initialValue: true)
+        } else {
+            print("🔍 DEBUG: No token found. User must log in.")
+            _isLoggedIn = State(initialValue: false)
+        }
+    }
     
     var body: some Scene {
         WindowGroup {
             if isLoggedIn {
                 HomeView()
-                    .transition(.opacity) // Smooth fade in
+                    .overlay(alignment: .topTrailing) {
+                        Button("Logout") {
+                            print("👋 DEBUG: Logging out and deleting token.")
+                            KeychainHelper.standard.delete()
+                            isLoggedIn = false
+                        }
+                        .padding()
+                        .tint(.red)
+                    }
             } else {
-                // We pass the "isLoggedIn" switch to the LoginView
-                // so the LoginView can flip it when successful!
                 LoginView(isLoggedIn: $isLoggedIn)
             }
         }

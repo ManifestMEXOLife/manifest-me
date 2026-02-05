@@ -99,6 +99,16 @@ struct LoginView: View {
                 if let httpResponse = response as? HTTPURLResponse {
                     if httpResponse.statusCode == 200 {
                         self.message = "✅ Success! Token received."
+                        
+                        //1. Prase the JSON to get the actual token string
+                        if let data = data,
+                            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                               let accessToken = json["access"] as? String {
+                                // 2. Save it to the keychain
+                                KeychainHelper.standard.save(token: accessToken)
+                                print("Token saved to secure storage")
+                            }
+                        
                         self.isLoggedIn = true
                         
                         // NOTE: In the future, we will save the token here.

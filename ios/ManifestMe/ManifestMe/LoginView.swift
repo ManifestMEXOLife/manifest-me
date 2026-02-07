@@ -14,7 +14,7 @@ struct LoginView: View {
     @Binding var isLoggedIn: Bool
     
     // this is the URL to your local Docker container
-    let loginURL = URL(string: "http://localhost:8000/api/token/pair")!
+    let loginURL = URL(string: "http://localhost:8000/api/token/pair/")!
     
     var body: some View {
         NavigationStack {

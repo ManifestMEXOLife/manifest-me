@@ -1,6 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import manifest_video
+from .views import manifest_video, check_profile_status, upload_profile_image
 
 print("🔥 DEBUG: URLs loading with Legacy Support...")
 
@@ -17,4 +17,6 @@ urlpatterns = [
 
     # --- FEATURES ---
     path('manifest/', manifest_video, name='manifest_video'),
+    path('profile/status/', check_profile_status, name='profile_status'),
+    path('profile/upload/', upload_profile_image, name='profile_upload'),
 ]

@@ -13,3 +13,9 @@ django-ninja-jwt
 djangorestframework
 djangorestframework-simplejwt
 django-environ
+google-cloud-storage
+moviepy==1.0.3
+Pillow
+google-cloud-aiplatform>=1.43.0
+requests
+google-auth

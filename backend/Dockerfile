@@ -1,22 +1,28 @@
-# backend/Dockerfile
+# 1. Use the bleeding edge Python 3.13
 FROM python:3.13-slim
 
-# 1. Install System Tools (FFmpeg is the important one here)
+# 2. Set environment variables (Fixed syntax with '=')
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# 3. Install System Video Tools (FFmpeg)
+# We need this because Python 3.13 is minimal and doesn't have video tools built-in
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    libpq-dev \
-    gcc \
+    libsm6 \
+    libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Create a folder inside the container
+# 4. Set work directory
 WORKDIR /app
 
-# 3. Copy requirements FIRST (for caching speed)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 5. Install dependencies
+COPY requirements.txt /app/
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
 
-# 4. Copy the rest of the code
-COPY . .
+# 6. Copy project
+COPY . /app/
 
-# 5. The default command (can be overridden by docker-compose)
-CMD ["gunicorn", "core.wsgi:application", "--bind", "0.0.0.0:8000"]
+# 7. Run the server
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

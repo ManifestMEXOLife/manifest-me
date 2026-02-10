@@ -32,3 +32,14 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s Profile"
+    
+class BetaInvite(models.Model):
+    code = models.CharField(max_length=50, unique=True)
+    is_active = models.BooleanField(default=True)
+    # --- NEW: USAGE TRACKING ---
+    uses_remaining = models.IntegerField(default=5)  # Starts with 5 lives
+    # ---------------------------
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.code} ({self.uses_remaining} uses left)"

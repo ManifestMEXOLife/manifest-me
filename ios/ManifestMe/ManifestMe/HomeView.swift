@@ -6,39 +6,142 @@
 //
 
 import SwiftUI
+import AVKit
 
 struct HomeView: View {
+    @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var videoService: VideoService
+    @State private var showCreateSheet = false
     
-    // We can use this to control dark mode for the whole app if we want
-    init() {
-        UITabBar.appearance().barTintColor = UIColor.black
-    }
-
+    // Grid Layout: 2 columns
+    let columns = [
+        GridItem(.flexible()),
+        GridItem(.flexible())
+    ]
+    
     var body: some View {
-        TabView {
-            // Tab 1: The New Screen
-            CreateView()
-                .tabItem {
-                    Label("Create", systemImage: "wand.and.stars")
+        NavigationView { // Wrap in Nav View for full screen playback
+            ZStack {
+                Color.black.edgesIgnoringSafeArea(.all)
+                
+                ScrollView {
+                    VStack(alignment: .leading) {
+                        // --- HEADER ---
+                        HStack {
+                            Text("My Manifestations")
+                                .font(.title2)
+                                .bold()
+                                .foregroundColor(.white)
+                            Spacer()
+                            Button(action: { authService.logout() }) {
+                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                                    .foregroundColor(.red)
+                            }
+                        }
+                        .padding()
+                        
+                        // --- 1. STATUS BAR (If Cooking) ---
+                        if videoService.isManifesting {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("✨ Manifesting your dream...")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                
+                                ProgressView(value: videoService.progress)
+                                    .tint(.yellow)
+                                    .background(Color.gray.opacity(0.3))
+                                    .scaleEffect(x: 1, y: 2, anchor: .center) // Makes the bar a bit thicker
+                                    .cornerRadius(4)
+                                
+                                Text("Connecting to the quantum field...")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding()
+                            .background(Color(red: 0.1, green: 0.1, blue: 0.2)) // Dark Purple/Blue background
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.yellow.opacity(0.5), lineWidth: 1) // Gold border
+                            )
+                            .padding(.horizontal)
+                            .transition(.move(edge: .top).combined(with: .opacity)) // Slide & Fade animation
+                        }
+                        
+                        // --- 2. THE GALLERY GRID ---
+                        if videoService.myVideos.isEmpty {
+                            Text("No manifestations yet. Start dreaming!")
+                                .foregroundColor(.gray)
+                                .padding(.top, 50)
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            LazyVGrid(columns: columns, spacing: 20) {
+                                ForEach(videoService.myVideos) { video in
+                                    NavigationLink(destination: FullScreenPlayer(videoURL: URL(string: video.url)!)) {
+                                        VStack {
+                                            // Simple Thumbnail / Placeholder
+                                            ZStack {
+                                                // 1. The Async Thumbnail Generator
+                                                VideoThumbnail(url: URL(string: video.url)!)
+                                                    .aspectRatio(16/9, contentMode: .fill) // ✅ New Landscape Mode
+                                                    .frame(minWidth: 0, maxWidth: .infinity)
+                                                    .cornerRadius(12)
+                                                    .clipped() // Don't let images bleed out
+                                                
+                                                // 2. Play Icon Overlay
+                                                Image(systemName: "play.circle.fill")
+                                                    .font(.system(size: 40))
+                                                    .foregroundColor(.white.opacity(0.8))
+                                                    .shadow(radius: 4)
+                                            }
+                                            
+                                            Text("Dream \(video.name.prefix(8))...") // Short name
+                                                .font(.caption)
+                                                .foregroundColor(.gray)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding()
+                        }
+                    }
                 }
-            
-            // Tab 2: Gallery (Placeholder)
-            Text("My Videos")
-                .tabItem {
-                    Label("Gallery", systemImage: "photo.stack")
+            }
+            // --- LOAD VIDEOS ON APPEAR ---
+            .onAppear {
+                if let token = KeychainHelper.standard.read() {
+                    videoService.fetchVideos(token: token)
                 }
-            
-            // Tab 3: Profile (Placeholder)
-            Text("Profile")
-                .tabItem {
-                    Label("Profile", systemImage: "person.circle")
+            }
+            .sheet(isPresented: $showCreateSheet) {
+                CreateView()
+            }
+            .overlay(alignment: .bottom) {
+                 // Floating Action Button for "Create"
+                 Button(action: { showCreateSheet = true }) {
+                    Image(systemName: "plus")
+                        .font(.title)
+                        .padding()
+                        .background(Color.yellow)
+                        .foregroundColor(.black)
+                        .clipShape(Circle())
+                        .shadow(radius: 5)
                 }
+                .padding(.bottom, 20)
+            }
         }
-        // Force dark mode for the tab bar look
-        .preferredColorScheme(.dark)
     }
 }
 
-#Preview {
-    HomeView()
+// Helper: Full Screen Player
+struct FullScreenPlayer: View {
+    let videoURL: URL
+    var body: some View {
+        VideoPlayer(player: AVPlayer(url: videoURL))
+            .edgesIgnoringSafeArea(.all)
+            .onAppear {
+                 // Auto-play when opened
+                 AVPlayer(url: videoURL).play()
+            }
+    }
 }

@@ -8,13 +8,14 @@
 import SwiftUI
 
 struct LoginView: View {
-    @State private var username = ""
-    @State private var password = ""
-    @State private var message = ""
-    @Binding var isLoggedIn: Bool
+    // 1. Inject the Brain (AuthService)
+    @EnvironmentObject var authService: AuthService
     
-    // this is the URL to your local Docker container
-    let loginURL = URL(string: "http://localhost:8000/api/token/pair/")!
+    @State private var email = ""
+    @State private var password = ""
+    
+    // Note: We removed the @Binding var isLoggedIn because
+    // authService.isAuthenticated now controls the flow globally.
     
     var body: some View {
         NavigationStack {
@@ -29,14 +30,15 @@ struct LoginView: View {
                     .font(.largeTitle)
                     .bold()
                 
-                // --- Input fields --
+                // --- INPUT FIELDS ---
                 VStack(alignment: .leading) {
-                    Text("Username")
+                    Text("Email") // Changed Label
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    TextField("Enter username", text: $username)
+                    TextField("Enter email", text: $email)
                         .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never) // Important!
+                        .keyboardType(.emailAddress) // Adds @ symbol
+                        .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
                 
@@ -49,9 +51,13 @@ struct LoginView: View {
                 }
                 
                 // --- ACTION BUTTON ---
-                Button(action: performLogin) {
-                    if isLoggedIn {
-                        Image(systemName: "checkmark")
+                Button(action: {
+                    // Call the shared service instead of local code
+                    authService.login(email: email, password: password)
+                }) {
+                    if authService.isLoading {
+                        ProgressView()
+                            .tint(.white)
                     } else {
                         Text("Sign In")
                             .frame(maxWidth: .infinity)
@@ -59,69 +65,46 @@ struct LoginView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(username.isEmpty || password.isEmpty)
+                .disabled(email.isEmpty || password.isEmpty || authService.isLoading)
                 .padding(.top, 10)
                 
-                // -- Status Message --
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(isLoggedIn ? .green : .red)
-                    .multilineTextAlignment(.center)
-                    .padding()
-            }
-            .padding(30)
-        }
-    }
-    
-    func performLogin() {
-        message = "Connecting..."
-        
-        // 1. Create the JSON payload
-        let body: [String: String] = [
-            "username": username,
-            "password": password
-        ]
-        
-        // 2. Configure the request
-        var request = URLRequest(url: loginURL)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        // 3. Send it!
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    self.message = "Error: \(error.localizedDescription)"
-                    return
+                // --- STATUS MESSAGE ---
+                if !authService.errorMessage.isEmpty {
+                    Text(authService.errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding()
                 }
                 
-                if let httpResponse = response as? HTTPURLResponse {
-                    if httpResponse.statusCode == 200 {
-                        self.message = "✅ Success! Token received."
-                        
-                        //1. Prase the JSON to get the actual token string
-                        if let data = data,
-                            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                               let accessToken = json["access"] as? String {
-                                // 2. Save it to the keychain
-                                KeychainHelper.standard.save(token: accessToken)
-                                print("Token saved to secure storage")
-                            }
-                        
-                        self.isLoggedIn = true
-                        
-                        // NOTE: In the future, we will save the token here.
-                        print("Login successful for: \(username)")
-                    } else {
-                        self.message = "❌ Login Failed (Status: \(httpResponse.statusCode))"
+                Spacer()
+                
+                // --- 2. THE BETA INVITE LINK ---
+                // This takes them to the Sign Up screen
+                NavigationLink(destination: SignUpView()) {
+                    HStack {
+                        Text("Don't have an account?")
+                            .foregroundColor(.primary)
+                        Text("Join Beta")
+                            .fontWeight(.bold)
+                            .foregroundColor(.yellow) // Highlights the special invite nature
                     }
+                    .padding()
                 }
             }
-        }.resume()
+            .padding(30)
+            // Ensure the AuthService handles errors gracefully
+            .onChange(of: authService.isAuthenticated) { oldValue, newValue in
+                if newValue {
+                    print("✅ LoginView detected success. Parent app should switch views now.")
+                }
+            }
+        }
     }
 }
 
+// Preview needs the EnvironmentObject injected
 #Preview {
-    LoginView(isLoggedIn: .constant(false))
+    LoginView()
+        .environmentObject(AuthService())
 }

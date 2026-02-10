@@ -127,9 +127,11 @@ def generate_manifestation(user_prompt, template_name="beach_manifestation", use
     if template_name == "beach_manifestation":
         base_prompt = "Cinematic video of the character from the reference image relaxing on a luxury tropical beach. Smiling, linen clothes. Golden hour lighting, 4k."
     elif template_name == "work_abroad_manifestation":
-        base_prompt = "Cinematic video of the character from the reference image sitting in a cafe in an old European city. Cobblestone streets. Vintage style, warm lighting, 4k."
+        # Added: "Wearing a stylish blazer and business attire" to force the look
+        base_prompt = "Cinematic video of the character from the reference image walking through an old European city. Wearing business attire. Cobblestone streets. Vintage style, warm lighting, 4k."
     else: 
-        base_prompt = "Cinematic video of the character from the reference image hiking in a green forest. Nature atmosphere, 4k."
+        # Added: "Wearing technical hiking gear" to force the look
+        base_prompt = "Cinematic video of the character from the reference image hiking in a green forest. Wearing technical hiking gear and a backpack. Nature atmosphere, 4k."
         
     final_prompt = f"{base_prompt} Action: {user_prompt}"
 

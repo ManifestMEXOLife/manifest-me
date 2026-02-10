@@ -1,11 +1,18 @@
 from django.shortcuts import render
 
+import datetime
+
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from google.cloud import storage
 from .engine import generate_manifestation, upload_blob, BUCKET_NAME
+
+from .models import BetaInvite
+from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
+from rest_framework_simplejwt.tokens import RefreshToken
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -44,17 +51,21 @@ def manifest_video(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def check_profile_status(request):
-    """Checks if the user has an avatar uploaded."""
     user_id = str(request.user.id)
-    
-    # Check GCS for the file
     storage_client = storage.Client()
     bucket = storage_client.bucket(BUCKET_NAME)
     blob = bucket.blob(f"users/{user_id}/profile/avatar.jpg")
     
-    return Response({
-        "has_image": blob.exists()
-    })
+    if blob.exists():
+        # Generate Signed URL (Valid for 1 hour)
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(hours=1),
+            method="GET"
+        )
+        return Response({"has_image": True, "image_url": signed_url})
+    
+    return Response({"has_image": False, "image_url": None})
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -82,3 +93,88 @@ def upload_profile_image(request):
         "status": "success", 
         "image_url": public_url
     })
+
+@api_view(['POST'])
+@permission_classes([]) 
+def register_user(request):
+    # CHANGED: We now look for 'email' instead of 'username'
+    email = request.data.get('email')
+    password = request.data.get('password')
+    invite_code = request.data.get('invite_code')
+
+    if not email or not password or not invite_code:
+        return Response({"error": "Missing email, password, or invite code"}, status=400)
+
+    # 🔒 THE BOUNCER (Check Beta Invite)
+    try:
+        ticket = BetaInvite.objects.get(code=invite_code, is_active=True)
+        if ticket.uses_remaining <= 0:
+            return Response({"error": "This invite code is fully claimed!"}, status=403)
+    except BetaInvite.DoesNotExist:
+        return Response({"error": "Invalid Invite Code."}, status=403)
+
+    # CHECK IF EMAIL EXISTS
+    # We treat the email as the username
+    if User.objects.filter(username=email).exists():
+        return Response({"error": "Email already registered"}, status=400)
+
+    # CREATE USER
+    # We save the email in BOTH the 'username' and 'email' fields
+    user = User.objects.create(
+        username=email, 
+        email=email,
+        password=make_password(password)
+    )
+
+    # DECREMENT TICKET
+    ticket.uses_remaining -= 1
+    if ticket.uses_remaining <= 0:
+        ticket.is_active = False
+    ticket.save()
+    
+    print(f"🎉 New User '{email}' joined via code '{invite_code}'")
+
+    # GENERATE TOKEN
+    refresh = RefreshToken.for_user(user)
+    
+    return Response({
+        "status": "success",
+        "user_id": user.id,
+        "access": str(refresh.access_token),
+        "refresh": str(refresh)
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_videos(request):
+    """
+    Fetches the list of all manifestation videos for the logged-in user.
+    """
+    user_id = str(request.user.id)
+    prefix = f"users/{user_id}/videos/"
+    
+    storage_client = storage.Client()
+    # Note: ensure BUCKET_NAME is imported from .engine or defined here
+    blobs = storage_client.list_blobs(BUCKET_NAME, prefix=prefix)
+    
+    video_list = []
+    for blob in blobs:
+        # 2. GENERATE SIGNED URL (The Key Card) 🔑
+        # This link works for 1 hour, then expires.
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(hours=1), 
+            method="GET"
+        )
+
+        video_list.append({
+            "url": signed_url, # <--- Use the key card, not the public link
+            "created_at": blob.time_created,
+            "name": blob.name.split('/')[-1]
+        })
+    
+    # Sort descending (Newest on top)
+    video_list.sort(key=lambda x: x['created_at'], reverse=True)
+    
+    return Response(video_list)

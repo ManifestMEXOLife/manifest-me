@@ -20,7 +20,9 @@ client = genai.Client(
     project=PROJECT_ID,
     location=LOCATION
 )
-storage_client = storage.Client()
+def get_storage_client():
+    """Returns a storage client, initializing only when called."""
+    return storage.Client()
 
 # --- MONKEYPATCH ---
 import PIL.Image
@@ -28,6 +30,7 @@ if not hasattr(PIL.Image, 'ANTIALIAS'):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
 
 def download_blob(bucket_name, source_blob_name, destination_file_name):
+    storage_client = get_storage_client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(source_blob_name)
     if not blob.exists():
@@ -37,6 +40,8 @@ def download_blob(bucket_name, source_blob_name, destination_file_name):
     return True
 
 def upload_blob(bucket_name, source_file_name, destination_blob_name):
+    """Uploads a file to the bucket."""
+    storage_client = get_storage_client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(source_file_name)
@@ -90,6 +95,7 @@ def generate_veo_video(local_avatar_path, prompt, output_local_path):
     # 6. RETRIEVE FROM MAILBOX
     # We ignore the API response and look directly in the folder we created.
     print(f"📦 Checking mailbox: generated/{run_id}/")
+    storage_client = get_storage_client()
     blobs = list(storage_client.list_blobs(BUCKET_NAME, prefix=f"generated/{run_id}/"))
     
     if not blobs:

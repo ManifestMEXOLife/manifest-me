@@ -13,12 +13,26 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import environ
 import os
+import dj_database_url
+from google.oauth2 import service_account
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env()
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+
+# Force the local path for your Mac
+CRED_PATH = os.path.join(BASE_DIR, 'google_credentials.json')
+
+if os.path.exists(CRED_PATH):
+    # 1. Manually create the credentials object
+    GS_CREDENTIALS = service_account.Credentials.from_service_account_file(CRED_PATH)
+    
+    # 2. Hard-set the Project ID to stop the "discovery" crash
+    # Replace 'manifest-me-app' with your actual GCP Project ID from the gcloud logs
+    os.environ["GOOGLE_CLOUD_PROJECT"] = "manifest-me-app"
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = CRED_PATH
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -28,8 +42,15 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'manifest-me-api-79704250837.us-central1.run.app', 
+    'localhost', 
+    '127.0.0.1'
+]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://manifest-me-api-79704250837.us-central1.run.app'
+]
 
 # Application definition
 
@@ -56,6 +77,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -81,17 +103,22 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# 🚀 Robust Database Config
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'manifest_db',
-        'USER': 'manifest_user',
-        'PASSWORD': 'manifest_pass',
-        'HOST': 'db', # We use localhost because we are running the server on your Windows machine
-        'PORT': '5432',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
+# Use Neon Postgres only if a valid URL is provided
+env_db_url = os.environ.get('DATABASE_URL')
+if env_db_url and env_db_url.strip():
+    DATABASES['default'] = dj_database_url.parse(
+        env_db_url, 
+        conn_max_age=600, 
+        ssl_require=True
+    )
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -138,3 +165,11 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
 }
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+DEFAULT_FILE_STORAGE = 'storages.backends.gcs.GoogleCloudStorage'
+GS_BUCKET_NAME = 'manifest-me-videos-nick'
+GS_QUERYSTRING_AUTH = True

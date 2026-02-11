@@ -18,7 +18,14 @@ class AuthService: ObservableObject {
     // ⚠️ IMPORTANT: Change this based on where you are running the app
     // Simulator: "http://127.0.0.1:8000/api"
     // Physical Device: "http://YOUR_MAC_LOCAL_IP:8000/api" (e.g. 192.168.1.5)
-    private let baseURL = "http://127.0.0.1:8000/api"
+    // --- CONFIGURATION ---
+//    #if DEBUG
+//    // For local testing on your Mac
+//    private let baseURL = "http://127.0.0.1:8000/api"
+//    #else
+    // Your live Cloud Run URL
+    private let baseURL = "https://manifest-me-api-79704250837.us-central1.run.app/api"
+//    #endif
     
     // --- INITIALIZATION ---
     init() {

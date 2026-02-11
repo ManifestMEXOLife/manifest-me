@@ -39,7 +39,7 @@ class VideoService: ObservableObject {
     private var progressTimer: Timer?
     
     // ⚠️ CHECK THIS: Ensure this matches your environment (Simulator vs Device)
-    private let baseURL = "http://127.0.0.1:8000/api"
+    private let baseURL = "https://manifest-me-api-79704250837.us-central1.run.app/api"
 
     // --- FUNCTION 1: FETCH PAST VIDEOS (The Tile View) ---
     func fetchVideos(token: String) {

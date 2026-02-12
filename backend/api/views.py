@@ -8,45 +8,47 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from google.cloud import storage
 from .engine import generate_manifestation, upload_blob, BUCKET_NAME
+from .models import Video
+from .tasks import enqueue_video_task
 
 from .models import BetaInvite
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
 from rest_framework_simplejwt.tokens import RefreshToken
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def manifest_video(request):
-    prompt = request.data.get('prompt', '').lower()
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+# def manifest_video(request):
+#     prompt = request.data.get('prompt', '').lower()
 
-    # get the user ID
-    user_id = str(request.user.id)
+#     # get the user ID
+#     user_id = str(request.user.id)
     
-    # Simple Logic to pick the folder based on keywords
-    if 'beach' in prompt or 'ocean' in prompt or 'sea' in prompt:
-        template = "beach_manifestation"
-    elif 'work' in prompt or 'job' in prompt or 'abroad' in prompt:
-        template = "work_abroad_manifestation"
-    else:
-        template = "wildlife_retreat_manifestation" # The default fallback
+#     # Simple Logic to pick the folder based on keywords
+#     if 'beach' in prompt or 'ocean' in prompt or 'sea' in prompt:
+#         template = "beach_manifestation"
+#     elif 'work' in prompt or 'job' in prompt or 'abroad' in prompt:
+#         template = "work_abroad_manifestation"
+#     else:
+#         template = "wildlife_retreat_manifestation" # The default fallback
 
-    print(f"🔮 Prompt: '{prompt}' -> Selected Template: '{template}'")
+#     print(f"🔮 Prompt: '{prompt}' -> Selected Template: '{template}'")
 
-    try:
-        # 2. PASS THE ID TO THE ENGINE
-        video_url = generate_manifestation(prompt, template_name=template, user_id=user_id)
+#     try:
+#         # 2. PASS THE ID TO THE ENGINE
+#         video_url = generate_manifestation(prompt, template_name=template, user_id=user_id)
         
-        return Response({
-            "status": "success",
-            "video_url": video_url,
-            "template_used": template
-        })
-    except Exception as e:
-        print(f"❌ ERROR: {e}")
-        return Response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+#         return Response({
+#             "status": "success",
+#             "video_url": video_url,
+#             "template_used": template
+#         })
+#     except Exception as e:
+#         print(f"❌ ERROR: {e}")
+#         return Response({
+#             "status": "error",
+#             "message": str(e)
+#         }, status=500)
     
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -178,3 +180,88 @@ def get_user_videos(request):
     video_list.sort(key=lambda x: x['created_at'], reverse=True)
     
     return Response(video_list)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def manifest_video(request):
+    """Waiter: Takes the order and puts it in the queue."""
+    prompt = request.data.get('prompt', '').lower()
+    user_id = str(request.user.id)
+    
+    # 1. TEMPLATE LOGIC (Stays here in the view)
+    if any(word in prompt for word in ['beach', 'ocean', 'sea']):
+        template = "beach_manifestation"
+    elif any(word in prompt for word in ['work', 'job', 'abroad']):
+        template = "work_abroad_manifestation"
+    else:
+        template = "wildlife_retreat_manifestation"
+
+    # 2. CREATE RECORD (Frozen Model: no template_used field)
+    video_obj = Video.objects.create(
+        user=request.user,
+        prompt=prompt,
+        status="PENDING"
+    )
+
+    # 3. HANDOFF (We pass the template string directly to the task)
+    try:
+        # We pass both the ID and the Template to the task
+        enqueue_video_task(video_obj.id, template, user_id)
+        
+        return Response({
+            "video_id": video_obj.id,
+            "status": "PENDING"
+        }, status=202)
+    except Exception as e:
+        print(f"❌ QUEUE ERROR: {e}")
+        return Response({"error": str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([]) 
+def video_worker(request):
+    """Chef: Receives the job and calls the frozen engine."""
+    job_id = request.data.get('job_id')
+    template_name = request.data.get('template_name') # Get template from payload
+    user_id = request.data.get('user_id')
+    
+    video_obj = Video.objects.get(id=job_id)
+    video_obj.status = "PROCESSING"
+    video_obj.save()
+
+    try:
+        # 🚀 CALL FROZEN ENGINE
+        # Matches your signature: (user_prompt, template_name=..., user_id=...)
+        final_url = generate_manifestation(
+            video_obj.prompt, 
+            template_name=template_name, 
+            user_id=user_id
+        )
+
+        # Update Frozen Model fields
+        video_obj.final_video_url = final_url
+        video_obj.status = "COMPLETED"
+        video_obj.save()
+        return Response({"status": "success"})
+
+    except Exception as e:
+        video_obj.status = "FAILED"
+        video_obj.save()
+        print(f"❌ ENGINE ERROR: {e}")
+        return Response({"error": str(e)}, status=500) 
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_video_status(request, video_id):
+    try:
+        # Only let the user see their own video status
+        video = Video.objects.get(id=video_id, user=request.user)
+        
+        return Response({
+            "status": video.status,
+            "video_url": video.final_video_url if video.status == "COMPLETED" else None
+        })
+    except Video.DoesNotExist:
+        return Response({"error": "Video not found"}, status=404)

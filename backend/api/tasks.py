@@ -1,6 +1,10 @@
+import os
 import json
 import logging
 from google.cloud import tasks_v2
+
+WORKER_URL = os.environ["WORKER_URL"]
+WORKER_SECRET = os.environ["WORKER_SECRET"]
 
 # Set up a logger that Google Cloud can see easily
 logger = logging.getLogger(__name__)
@@ -15,7 +19,7 @@ def enqueue_video_task(job_id, template_name, user_id):
         project = "manifest-me-app"
         queue = "video-generation-queue"
         location = "us-central1"
-        url = "https://manifest-me-api-79704250837.us-central1.run.app/api/worker/"
+        url = WORKER_URL
 
         parent = client.queue_path(project, location, queue)
 
@@ -25,15 +29,18 @@ def enqueue_video_task(job_id, template_name, user_id):
             "user_id": user_id
         }
 
+        task_name = client.task_path(project, location, queue, f"video-{job_id}")
+
         task = {
+            "name": task_name,
             "http_request": {
                 "http_method": tasks_v2.HttpMethod.POST,
                 "url": url,
-                "headers": {"Content-type": "application/json"},
-                "body": json.dumps(payload).encode("utf-8"),
-                "oidc_token": {
-                    "service_account_email": "79704250837-compute@developer.gserviceaccount.com",
+                "headers": {
+                    "Content-Type": "application/json",
+                    "X-Worker-Secret": WORKER_SECRET,
                 },
+                "body": json.dumps(payload).encode("utf-8"),
             }
         }
         client.create_task(request={"parent": parent, "task": task})

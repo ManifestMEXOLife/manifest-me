@@ -164,7 +164,7 @@ def generate_manifestation(user_prompt, template_name="beach_manifestation", use
         clip_ai = clip_ai.resize(newsize=clip_intro.size)
         
         final = concatenate_videoclips([clip_intro, clip_ai, clip_outro], method="compose")
-        final.write_videofile(final_output_path, codec="libx264", audio_codec="aac", fps=24)
+        final.write_videofile(final_output_path, codec="libx264", audio_codec="aac", fps=24, verbose=False, logger=None)
         
     except Exception as e:
         print(f"❌ Stitching Error: {e}")
@@ -173,4 +173,7 @@ def generate_manifestation(user_prompt, template_name="beach_manifestation", use
     # 5. UPLOAD
     timestamp = int(time.time())
     output_key = f"users/{user_id}/videos/manifest_{timestamp}.mp4"
-    return upload_blob(BUCKET_NAME, final_output_path, output_key)
+
+    upload_blob(BUCKET_NAME, final_output_path, output_key)
+
+    return output_key

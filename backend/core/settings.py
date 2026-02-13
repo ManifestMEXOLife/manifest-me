@@ -45,7 +45,8 @@ DEBUG = env.bool('DEBUG', default=False)
 ALLOWED_HOSTS = [
     'manifest-me-api-79704250837.us-central1.run.app', 
     'localhost', 
-    '127.0.0.1'
+    '127.0.0.1',
+    ".run.app"
 ]
 
 CSRF_TRUSTED_ORIGINS = [

@@ -30,6 +30,7 @@ class VideoService: ObservableObject {
     @Published var isManifesting: Bool = false
     @Published var currentVideoURL: URL? = nil
     @Published var errorMessage: String = ""
+    @Published var pollingJobId: String? = nil
     
     // --- NEW: THE SHOEBOX (Your list of past videos) ---
     @Published var myVideos: [ManifestationVideo] = []
@@ -83,70 +84,63 @@ class VideoService: ObservableObject {
     }
     // --- FUNCTION 2: CREATE NEW VIDEO (The Manifestation) ---
     func manifest(prompt: String, token: String) {
-        // 1. Lock the UI
         self.isManifesting = true
-        self.errorMessage = ""
         self.progress = 0.0
-        self.currentVideoURL = nil
         
-        // 2. Start "Fake" Progress Bar
-        startProgressSimulation()
-        
-        // 3. Prepare Request
         guard let url = URL(string: "\(baseURL)/manifest/") else { return }
-        
-        let body: [String: Any] = ["prompt": prompt]
-        
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        // 4. Send to Backend
-        print("🚀 Sending Dream: \(prompt)")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["prompt": prompt])
+
         URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
-                self.stopProgress() // Stop the fake timer
-                
-                if let error = error {
+                guard let data = data, let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 202 else {
                     self.isManifesting = false
-                    self.errorMessage = "Failed: \(error.localizedDescription)"
+                    self.errorMessage = "Failed to start manifestation."
                     return
                 }
-                
-                guard let httpResponse = response as? HTTPURLResponse else { return }
-                
-                if httpResponse.statusCode == 200 {
-                    // SUCCESS!
-                    self.handleSuccess(data: data)
-                    
-                    // REFRESH THE GRID! (So the new video appears)
-                    self.fetchVideos(token: token)
-                    
-                } else {
-                    self.isManifesting = false
-                    self.errorMessage = "Server Error: \(httpResponse.statusCode)"
+
+                // 1. Get the Job ID from the 202 response
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let jobId = json["video_id"] as? String {
+                    self.pollingJobId = jobId
+                    // 2. Start Polling!
+                    self.pollForVideoStatus(jobId: jobId, token: token)
                 }
             }
         }.resume()
     }
-    
-    private func handleSuccess(data: Data?) {
-        guard let data = data else { return }
-        do {
-            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let urlString = json["video_url"] as? String,
-               let url = URL(string: urlString) {
-                
-                self.currentVideoURL = url
-                self.isManifesting = false // Unlock the UI
-                print("✨ Video Ready: \(url)")
+
+    func pollForVideoStatus(jobId: String, token: String) {
+        guard let url = URL(string: "\(baseURL)/videos/status/\(jobId)/") else { return }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                guard let data = data,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let status = json["status"] as? String else { return }
+
+                if status == "COMPLETED" {
+                    if let urlString = json["video_url"] as? String {
+                        self.currentVideoURL = URL(string: urlString)
+                        self.isManifesting = false
+                        self.fetchVideos(token: token) // Refresh the grid
+                    }
+                } else if status == "FAILED" {
+                    self.isManifesting = false
+                    self.errorMessage = "Manifestation failed."
+                } else {
+                    // Still processing... wait 10 seconds and try again
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                        self.pollForVideoStatus(jobId: jobId, token: token)
+                    }
+                }
             }
-        } catch {
-            self.errorMessage = "Could not read video link."
-            self.isManifesting = false
-        }
+        }.resume()
     }
     
     // --- HELPER: FAKE PROGRESS BAR ---

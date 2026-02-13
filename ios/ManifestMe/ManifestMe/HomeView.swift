@@ -49,13 +49,12 @@ struct HomeView: View {
                                 
                                 ProgressView(value: videoService.progress)
                                     .tint(.yellow)
-                                    .background(Color.gray.opacity(0.3))
-                                    .scaleEffect(x: 1, y: 2, anchor: .center) // Makes the bar a bit thicker
-                                    .cornerRadius(4)
                                 
-                                Text("Connecting to the quantum field...")
+                                // Suggestion: Add a "Background" tip
+                                Text("This takes about 5 mins. You can safely close the app; we're working in the cloud!")
                                     .font(.caption)
                                     .foregroundColor(.gray)
+                                    .italic()
                             }
                             .padding()
                             .background(Color(red: 0.1, green: 0.1, blue: 0.2)) // Dark Purple/Blue background
@@ -110,7 +109,15 @@ struct HomeView: View {
             // --- LOAD VIDEOS ON APPEAR ---
             .onAppear {
                 if let token = KeychainHelper.standard.read() {
+                    // 1. Load the history as usual
                     videoService.fetchVideos(token: token)
+                    
+                    // 2. NEW: If we were manifesting when the app closed, resume polling
+                    // You'll need to store 'pollingJobId' in UserDefaults if you want
+                    // it to survive a full app kill, but for now, this handles navigation:
+                    if let jobId = videoService.pollingJobId {
+                        videoService.pollForVideoStatus(jobId: jobId, token: token)
+                    }
                 }
             }
             .sheet(isPresented: $showCreateSheet) {

@@ -1,6 +1,7 @@
 from django.shortcuts import render
 
 import datetime
+import uuid, os
 
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +13,7 @@ from .models import Video
 from .tasks import enqueue_video_task
 
 from .models import BetaInvite
+from django.db import transaction
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -219,49 +221,87 @@ def manifest_video(request):
 
 
 @api_view(['POST'])
-@permission_classes([]) 
+@permission_classes([])
 def video_worker(request):
-    """Chef: Receives the job and calls the frozen engine."""
-    job_id = request.data.get('job_id')
-    template_name = request.data.get('template_name') # Get template from payload
-    user_id = request.data.get('user_id')
-    
-    video_obj = Video.objects.get(id=job_id)
-    video_obj.status = "PROCESSING"
-    video_obj.save()
+    expected = os.environ.get("WORKER_SECRET")
+    got = request.headers.get("X-Worker-Secret")
+    if expected and got != expected:
+        return Response({"error": "forbidden"}, status=403)
+
+    job_id = request.data.get("job_id")
+    template_name = request.data.get("template_name")
+    user_id = request.data.get("user_id")
+
+    run_id = str(uuid.uuid4())[:8]
+    print(f"[worker {run_id}] START job_id={job_id}")
+
+    # ✅ atomic claim
+    with transaction.atomic():
+        video_obj = Video.objects.select_for_update().get(id=job_id)
+        print(f"[worker {run_id}] status_before={video_obj.status}")
+
+        if video_obj.status == "COMPLETED":
+            return Response({"status": "ok", "note": "already completed"}, status=200)
+
+        if video_obj.status == "PROCESSING":
+            # IMPORTANT: stop Cloud Tasks retries from re-running Vertex
+            return Response({"status": "ok", "note": "already processing"}, status=200)
+
+        # optionally: if FAILED, choose whether to retry or stop
+        # if video_obj.status == "FAILED":
+        #     return Response({"status": "ok", "note": "already failed"}, status=200)
+
+        video_obj.status = "PROCESSING"
+        video_obj.save()
 
     try:
-        # 🚀 CALL FROZEN ENGINE
-        # Matches your signature: (user_prompt, template_name=..., user_id=...)
+        print(f"[worker {run_id}] CALLING VERTEX")
         final_url = generate_manifestation(
-            video_obj.prompt, 
-            template_name=template_name, 
-            user_id=user_id
+            video_obj.prompt,
+            template_name=template_name,
+            user_id=user_id,
         )
 
-        # Update Frozen Model fields
-        video_obj.final_video_url = final_url
+        # ⚠️ this field must be TextField or store GCS path instead
+        video_obj.final_video_gcs_path = final_url
         video_obj.status = "COMPLETED"
         video_obj.save()
-        return Response({"status": "success"})
+
+        print(f"[worker {run_id}] DONE")
+        return Response({"status": "success"}, status=200)
 
     except Exception as e:
         video_obj.status = "FAILED"
         video_obj.save()
-        print(f"❌ ENGINE ERROR: {e}")
-        return Response({"error": str(e)}, status=500) 
+        print(f"[worker {run_id}] ENGINE ERROR: {e}")
+        # If you want retries for transient errors, keep 500.
+        # If retries are costing you money, return 200 here and handle retries manually.
+        return Response({"error": str(e)}, status=500)
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_video_status(request, video_id):
     try:
-        # Only let the user see their own video status
         video = Video.objects.get(id=video_id, user=request.user)
-        
+
+        signed_url = None
+
+        if video.status == "COMPLETED" and video.final_video_gcs_path:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(BUCKET_NAME)
+            blob = bucket.blob(video.final_video_gcs_path)
+
+            signed_url = blob.generate_signed_url(
+                version="v4",
+                expiration=datetime.timedelta(hours=1),
+                method="GET"
+            )
+
         return Response({
             "status": video.status,
-            "video_url": video.final_video_url if video.status == "COMPLETED" else None
+            "video_url": signed_url
         })
+
     except Video.DoesNotExist:
         return Response({"error": "Video not found"}, status=404)
